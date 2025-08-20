@@ -232,11 +232,31 @@ async function saveDataToSupabase(categories: Category[], retryCount = 0): Promi
 			const isAdmin = await getIsAdminUser();
 			if (isAdmin) {
 				// Admin updates the catalog (categories + problems)
+				// Determine deletions by comparing existing rows with desired payload
+				const currentUserId = sessionData.session.user.id;
+				const { data: existingCategories, error: existingCatErr } = await supabase
+					.from('categories')
+					.select('id')
+					.eq('user_id', currentUserId);
+				if (existingCatErr) {
+					console.error('Fetch existing categories error:', existingCatErr);
+					throw existingCatErr;
+				}
+
+				const { data: existingProblems, error: existingProbErr } = await supabase
+					.from('problems')
+					.select('id')
+					.eq('user_id', currentUserId);
+				if (existingProbErr) {
+					console.error('Fetch existing problems error:', existingProbErr);
+					throw existingProbErr;
+				}
+
 				const categoriesPayload = categories.map((cat, index) => ({
 					id: cat.id,
 					title: cat.title,
 					order_index: index,
-					user_id: sessionData.session.user.id,
+					user_id: currentUserId,
 				}));
 				const { error: categoriesError } = await supabase
 					.from('categories')
@@ -256,7 +276,7 @@ async function saveDataToSupabase(categories: Category[], retryCount = 0): Promi
 						difficulty: prob.difficulty,
 						completed: prob.completed,
 						note: prob.note,
-						user_id: sessionData.session.user.id
+						user_id: currentUserId
 					}))
 				);
 				const { error: problemsError } = await supabase
@@ -265,6 +285,44 @@ async function saveDataToSupabase(categories: Category[], retryCount = 0): Promi
 				if (problemsError) {
 					console.error('Problems save error:', problemsError);
 					throw problemsError;
+				}
+
+				// Compute and perform deletions for rows that were removed in the UI
+				const desiredCategoryIds = new Set(categories.map((c) => c.id));
+				const desiredProblemIds = new Set(
+					categories.flatMap((c) => c.problems.map((p) => p.id))
+				);
+
+				const categoriesToDelete = (existingCategories ?? [])
+					.map((row: any) => row.id)
+					.filter((id: string) => !desiredCategoryIds.has(id));
+
+				const problemsToDelete = (existingProblems ?? [])
+					.map((row: any) => row.id)
+					.filter((id: string) => !desiredProblemIds.has(id));
+
+				if (problemsToDelete.length > 0) {
+					const { error: delProblemsError } = await supabase
+						.from('problems')
+						.delete()
+						.in('id', problemsToDelete)
+						.eq('user_id', currentUserId);
+					if (delProblemsError) {
+						console.error('Problems delete error:', delProblemsError);
+						throw delProblemsError;
+					}
+				}
+
+				if (categoriesToDelete.length > 0) {
+					const { error: delCategoriesError } = await supabase
+						.from('categories')
+						.delete()
+						.in('id', categoriesToDelete)
+						.eq('user_id', currentUserId);
+					if (delCategoriesError) {
+						console.error('Categories delete error:', delCategoriesError);
+						throw delCategoriesError;
+					}
 				}
 				console.log('Catalog saved by admin');
 			} else {
