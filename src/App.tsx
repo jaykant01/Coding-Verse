@@ -16,6 +16,7 @@ export default function App() {
 	const [showAuthForm, setShowAuthForm] = useState(false);
 	const [isSignUp, setIsSignUp] = useState(false);
 	const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'error'>('connected');
+	const [isSaving, setIsSaving] = useState(false);
 	
 	// Signup form fields
 	const [signupData, setSignupData] = useState({
@@ -40,14 +41,25 @@ export default function App() {
 		})();
 
 		// Subscribe to remote changes for live updates across devices
-		// Add a small delay to ensure initial data is loaded first
+		// Add a longer delay to ensure initial data is loaded first and avoid conflicts
 		let cleanup: (() => void) | null = null;
 		const timeoutId = setTimeout(() => {
 			cleanup = onRemoteCategoriesChange(async () => {
-				const latest = await loadData();
-				setCategories(latest);
+				console.log('Realtime update triggered', new Date().toISOString(), 'isSaving:', isSaving);
+				// Don't update if we're currently saving
+				if (isSaving) {
+					console.log('Skipping realtime update - currently saving');
+					return;
+				}
+				
+				// Add a small delay to avoid conflicts with immediate saves
+				setTimeout(async () => {
+					console.log('Loading latest data from realtime update');
+					const latest = await loadData();
+					setCategories(latest);
+				}, 500);
 			});
-		}, 1000);
+		}, 2000);
 
 		return () => {
 			clearTimeout(timeoutId);
@@ -75,17 +87,24 @@ export default function App() {
 	const [filterDifficulty, setFilterDifficulty] = useState<Difficulty | undefined>(undefined);
 
 	useEffect(() => {
-		if (!loading) {
-			saveData(categories).catch((error) => {
-				// Update connection status based on save errors
-				if (error && error.message && error.message.includes('ERR_INSUFFICIENT_RESOURCES')) {
-					setConnectionStatus('error');
-					// Reset to connected after 5 seconds
-					setTimeout(() => setConnectionStatus('connected'), 5000);
-				}
-			});
+		if (!loading && !isSaving) {
+			setIsSaving(true);
+			saveData(categories)
+				.then(() => {
+					setIsSaving(false);
+				})
+				.catch((error) => {
+					console.error('Save error:', error);
+					setIsSaving(false);
+					// Update connection status based on save errors
+					if (error && error.message && error.message.includes('ERR_INSUFFICIENT_RESOURCES')) {
+						setConnectionStatus('error');
+						// Reset to connected after 5 seconds
+						setTimeout(() => setConnectionStatus('connected'), 5000);
+					}
+				});
 		}
-	}, [categories, loading]);
+	}, [categories, loading, isSaving]);
 
 	// Add beforeunload event listener to ensure data is saved before page refresh
 	useEffect(() => {
@@ -108,21 +127,39 @@ export default function App() {
 	}, [categories]);
 
 	function createCategory(title: string) {
+		setIsSaving(true);
 		setCategories((prev) => {
 			const newCategories = [...prev, { id: generateId('c'), title, problems: [] }];
 			// Force immediate save for creating categories to ensure they persist
-			saveData(newCategories, true).catch(console.error);
+			saveData(newCategories, true)
+				.then(() => {
+					setIsSaving(false);
+				})
+				.catch((error) => {
+					console.error('Save error:', error);
+					setIsSaving(false);
+				});
 			return newCategories;
 		});
 	}
 
 	function addProblem(categoryId: string, problem: Problem) {
+		console.log('Adding problem:', problem.title, new Date().toISOString());
+		setIsSaving(true);
 		setCategories((prev) => {
 			const newCategories = prev.map((c) => 
 				c.id === categoryId ? { ...c, problems: [...c.problems, problem] } : c
 			);
 			// Force immediate save for adding problems to ensure they persist
-			saveData(newCategories, true).catch(console.error);
+			saveData(newCategories, true)
+				.then(() => {
+					console.log('Problem saved successfully:', problem.title);
+					setIsSaving(false);
+				})
+				.catch((error) => {
+					console.error('Save error:', error);
+					setIsSaving(false);
+				});
 			return newCategories;
 		});
 	}

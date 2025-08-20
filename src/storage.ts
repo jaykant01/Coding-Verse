@@ -330,7 +330,7 @@ async function saveDataToSupabase(categories: Category[], retryCount = 0): Promi
 						throw delCategoriesError;
 					}
 				}
-				console.log('Catalog saved by admin');
+				console.log('Catalog saved by admin', new Date().toISOString());
 			} else {
 				// Sub-user: only upsert per-user progress
 				const progressPayload = categories.flatMap((cat) =>
