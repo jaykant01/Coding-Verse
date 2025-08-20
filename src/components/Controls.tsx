@@ -37,16 +37,24 @@ export function Controls(props: ControlsProps) {
 		setShowCategoryModal(false);
 	};
 
-	const handleAddProblem = () => {
+	const handleAddProblem = async () => {
 		if (!newProblem.title.trim() || !newProblem.url.trim() || !newProblem.categoryId) return;
-		props.onAddProblem(newProblem.categoryId, {
+		
+		// Create the problem object
+		const problem = {
 			id: generateId('p'),
 			title: newProblem.title.trim(),
 			url: newProblem.url.trim(),
 			platform: newProblem.platform,
 			difficulty: newProblem.difficulty,
 			completed: false,
-		});
+			note: '', // Add the missing note field
+		};
+		
+		// Add the problem
+		props.onAddProblem(newProblem.categoryId, problem);
+		
+		// Reset form and close modal
 		setNewProblem({ title: '', url: '', platform: 'GFG', difficulty: 'Easy', categoryId: '' });
 		setShowProblemModal(false);
 	};

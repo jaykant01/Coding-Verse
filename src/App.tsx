@@ -40,11 +40,21 @@ export default function App() {
 		})();
 
 		// Subscribe to remote changes for live updates across devices
-		const off = onRemoteCategoriesChange(async () => {
-			const latest = await loadData();
-			setCategories(latest);
-		});
-		return () => off();
+		// Add a small delay to ensure initial data is loaded first
+		let cleanup: (() => void) | null = null;
+		const timeoutId = setTimeout(() => {
+			cleanup = onRemoteCategoriesChange(async () => {
+				const latest = await loadData();
+				setCategories(latest);
+			});
+		}, 1000);
+
+		return () => {
+			clearTimeout(timeoutId);
+			if (cleanup) {
+				cleanup();
+			}
+		};
 	}, []);
 
 	// Check authentication status
@@ -77,6 +87,19 @@ export default function App() {
 		}
 	}, [categories, loading]);
 
+	// Add beforeunload event listener to ensure data is saved before page refresh
+	useEffect(() => {
+		const handleBeforeUnload = () => {
+			if (categories.length > 0) {
+				// Force save before unload
+				saveData(categories, true).catch(console.error);
+			}
+		};
+
+		window.addEventListener('beforeunload', handleBeforeUnload);
+		return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+	}, [categories]);
+
 	const progress = useMemo(() => {
 		const all = flattenProblems(categories);
 		const done = all.filter((p) => p.completed).length;
@@ -85,13 +108,23 @@ export default function App() {
 	}, [categories]);
 
 	function createCategory(title: string) {
-		setCategories((prev) => [...prev, { id: generateId('c'), title, problems: [] }]);
+		setCategories((prev) => {
+			const newCategories = [...prev, { id: generateId('c'), title, problems: [] }];
+			// Force immediate save for creating categories to ensure they persist
+			saveData(newCategories, true).catch(console.error);
+			return newCategories;
+		});
 	}
 
 	function addProblem(categoryId: string, problem: Problem) {
-		setCategories((prev) =>
-			prev.map((c) => (c.id === categoryId ? { ...c, problems: [...c.problems, problem] } : c))
-		);
+		setCategories((prev) => {
+			const newCategories = prev.map((c) => 
+				c.id === categoryId ? { ...c, problems: [...c.problems, problem] } : c
+			);
+			// Force immediate save for adding problems to ensure they persist
+			saveData(newCategories, true).catch(console.error);
+			return newCategories;
+		});
 	}
 
 	function updateProblem(categoryId: string, problemId: string, updater: (p: Problem) => Problem) {
