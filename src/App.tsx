@@ -40,8 +40,9 @@ export default function App() {
 			setLoading(false);
 		})();
 
-		// Subscribe to remote changes for live updates across devices
-		// Add a longer delay to ensure initial data is loaded first and avoid conflicts
+		// Temporarily disable realtime subscription to prevent infinite loops
+		// TODO: Re-enable with proper debouncing when the save loop issue is resolved
+		/*
 		let cleanup: (() => void) | null = null;
 		const timeoutId = setTimeout(() => {
 			cleanup = onRemoteCategoriesChange(async () => {
@@ -67,6 +68,7 @@ export default function App() {
 				cleanup();
 			}
 		};
+		*/
 	}, []);
 
 	// Check authentication status
@@ -86,25 +88,35 @@ export default function App() {
 	const [search, setSearch] = useState('');
 	const [filterDifficulty, setFilterDifficulty] = useState<Difficulty | undefined>(undefined);
 
+	// Track the last saved state to prevent unnecessary saves
+	const [lastSavedState, setLastSavedState] = useState<string>('');
+
 	useEffect(() => {
 		if (!loading && !isSaving) {
-			setIsSaving(true);
-			saveData(categories)
-				.then(() => {
-					setIsSaving(false);
-				})
-				.catch((error) => {
-					console.error('Save error:', error);
-					setIsSaving(false);
-					// Update connection status based on save errors
-					if (error && error.message && error.message.includes('ERR_INSUFFICIENT_RESOURCES')) {
-						setConnectionStatus('error');
-						// Reset to connected after 5 seconds
-						setTimeout(() => setConnectionStatus('connected'), 5000);
-					}
-				});
+			// Create a hash of the current state to compare with last saved
+			const currentStateHash = JSON.stringify(categories);
+			
+			// Only save if the state has actually changed
+			if (currentStateHash !== lastSavedState) {
+				setIsSaving(true);
+				saveData(categories)
+					.then(() => {
+						setIsSaving(false);
+						setLastSavedState(currentStateHash);
+					})
+					.catch((error) => {
+						console.error('Save error:', error);
+						setIsSaving(false);
+						// Update connection status based on save errors
+						if (error && error.message && error.message.includes('ERR_INSUFFICIENT_RESOURCES')) {
+							setConnectionStatus('error');
+							// Reset to connected after 5 seconds
+							setTimeout(() => setConnectionStatus('connected'), 5000);
+						}
+					});
+			}
 		}
-	}, [categories, loading, isSaving]);
+	}, [categories, loading, isSaving, lastSavedState]);
 
 	// Add beforeunload event listener to ensure data is saved before page refresh
 	useEffect(() => {
@@ -134,6 +146,7 @@ export default function App() {
 			saveData(newCategories, true)
 				.then(() => {
 					setIsSaving(false);
+					setLastSavedState(JSON.stringify(newCategories));
 				})
 				.catch((error) => {
 					console.error('Save error:', error);
@@ -155,6 +168,7 @@ export default function App() {
 				.then(() => {
 					console.log('Problem saved successfully:', problem.title);
 					setIsSaving(false);
+					setLastSavedState(JSON.stringify(newCategories));
 				})
 				.catch((error) => {
 					console.error('Save error:', error);
@@ -389,6 +403,20 @@ export default function App() {
 								{connectionStatus === 'connected' ? 'Connected' : 
 								 connectionStatus === 'disconnected' ? 'Offline' : 'Error'}
 							</span>
+							{isAuthenticated && isAdmin && (
+								<button
+									onClick={async () => {
+										console.log('Manual refresh triggered');
+										const latest = await loadData();
+										setCategories(latest);
+										setLastSavedState(JSON.stringify(latest));
+									}}
+									className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+									title="Refresh data from server"
+								>
+									↻
+								</button>
+							)}
 						</div>
 						
 						{/* Authentication Section */}

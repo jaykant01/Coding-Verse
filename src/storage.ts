@@ -188,8 +188,8 @@ export async function loadData(): Promise<Category[]> {
 // Add throttling and debouncing for save operations
 let saveTimeout: NodeJS.Timeout | null = null;
 let lastSaveTime = 0;
-const SAVE_DEBOUNCE_MS = 500; // Reduced to 500ms for faster response
-const MIN_SAVE_INTERVAL_MS = 1000; // Reduced to 1 second for faster saves
+const SAVE_DEBOUNCE_MS = 100; // Reduced to 100ms for faster response
+const MIN_SAVE_INTERVAL_MS = 500; // Reduced to 500ms for faster saves
 
 export async function saveData(categories: Category[], forceImmediate = false): Promise<void> {
 	try {
