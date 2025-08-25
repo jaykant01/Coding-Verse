@@ -285,9 +285,21 @@ export default function App() {
 			<header className="border-b border-primary bg-layer-02/80 backdrop-blur shadow-layer-1">
 				<div className="container-xl py-8 flex items-center justify-between">
 					<div className="flex items-center gap-6">
-						<div className="flex flex-col">
-							<div className="text-2xl font-semibold text-white">Total Progress</div>
-							<div className="text-2xl font-semibold text-white mt-1">{progress.done} / {progress.all}</div>
+						<div className="flex items-center gap-4">
+							{/* Logo - PNG image */}
+							<div className="flex-shrink-0">
+								<img
+									src="/logo.png"
+									alt="Logo"
+									width="150"
+									height="150"
+									className="rounded-lg"
+								/>
+							</div>
+							<div className="flex flex-col">
+								<div className="text-2xl font-semibold text-white">Total Progress</div>
+								<div className="text-2xl font-semibold text-white mt-1">{progress.done} / {progress.all}</div>
+							</div>
 						</div>
 						
 						<div className="relative h-24 w-24">
