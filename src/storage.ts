@@ -132,6 +132,54 @@ export async function loadData(): Promise<Category[]> {
 					}));
 					return categories;
 				}
+	// 		}
+	// 	}
+	// } catch (e) {
+	// 	console.error('Supabase load error, falling back to local:', e);
+	// 	// If it's a resource error, wait a bit before trying again
+	// 	if (e instanceof Error && e.message.includes('ERR_INSUFFICIENT_RESOURCES')) {
+	// 		console.log('Resource limit reached, waiting before retry...');
+	// 		// Don't retry immediately - let the user continue with local data
+	// 	}
+	// }
+	//
+	// // Always try local storage as fallback (for both authenticated and non-authenticated users)
+			}
+		} else {
+			// NOT AUTHENTICATED: Load public admin data (read-only)
+			try {
+				const { data: categoriesData, error: categoriesError } = await supabase
+					.from('categories')
+					.select('id, title, order_index')
+					.order('order_index', { ascending: true });
+				if (categoriesError) throw categoriesError;
+
+				const { data: problemsData, error: problemsError } = await supabase
+					.from('problems')
+					.select('id, category_id, title, url, platform, difficulty');
+				if (problemsError) throw problemsError;
+
+				if (categoriesData && problemsData) {
+					const categories: Category[] = categoriesData.map((cat: any) => ({
+						id: cat.id,
+						title: cat.title,
+						problems: problemsData
+							.filter((prob: any) => prob.category_id === cat.id)
+							.map((prob: any) => ({
+								id: prob.id,
+								title: prob.title,
+								url: prob.url,
+								platform: prob.platform,
+								difficulty: prob.difficulty,
+								completed: false, // Default to false for non-authenticated users
+								note: ''
+							}))
+					}));
+					return categories;
+				}
+			} catch (e) {
+				console.error('Failed to load public data from Supabase:', e);
+				// Fall through to local storage
 			}
 		}
 	} catch (e) {
@@ -142,8 +190,9 @@ export async function loadData(): Promise<Category[]> {
 			// Don't retry immediately - let the user continue with local data
 		}
 	}
-	
-	// Always try local storage as fallback (for both authenticated and non-authenticated users)
+
+// Always try local storage as fallback (for both authenticated and non-authenticated users)
+
 	try {
 		const raw = localStorage.getItem(STORAGE_KEY);
 		const localData = raw ? (JSON.parse(raw) as Category[]) : [];
